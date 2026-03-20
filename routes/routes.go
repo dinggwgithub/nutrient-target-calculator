@@ -18,6 +18,12 @@ func SetupRouter() *gin.Engine {
 		// 目标计算接口
 		api.POST("/target/calculate", controller.CalculateTarget)
 
+		// 历史记录接口
+		api.GET("/target/history", controller.GetHistoryList)
+		api.GET("/target/history/detail", controller.GetHistoryDetail)
+		api.POST("/target/history/compare", controller.CompareHistory)
+		api.DELETE("/target/history", controller.DeleteHistory)
+
 		// 健康检查
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(200, gin.H{
