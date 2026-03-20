@@ -9,14 +9,19 @@ import (
 )
 
 // @title 营养素目标计算器API
-// @version 1.0
-// @description 基于数据库摄入数据和DRIs计算营养素目标摄入量的API
+// @version 2.0
+// @description 基于数据库摄入数据和DRIs计算营养素目标摄入量的API。支持计算结果自动保存到Redis，提供历史记录查询和版本对比功能。数据TTL=1天。
 // @host localhost:8080
 // @BasePath /api
 func main() {
 	// 初始化数据库连接
 	if err := config.InitDB(); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
+	}
+
+	// 初始化 Redis 连接
+	if err := config.InitRedis(); err != nil {
+		log.Fatalf("Failed to initialize redis: %v", err)
 	}
 
 	// 设置路由

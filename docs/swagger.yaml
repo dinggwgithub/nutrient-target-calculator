@@ -42,6 +42,185 @@ definitions:
       message:
         type: string
     type: object
+  dto.CalculationRecord:
+    properties:
+      created_at:
+        description: 格式化时间
+        type: string
+      id:
+        description: 记录ID (UUID)
+        type: string
+      request:
+        allOf:
+        - $ref: '#/definitions/dto.CalculateTargetRequest'
+        description: 请求参数
+      result:
+        allOf:
+        - $ref: '#/definitions/dto.TargetData'
+        description: 计算结果
+      timestamp:
+        description: 计算时间戳
+        type: integer
+      ttl_seconds:
+        description: 剩余过期时间（秒）
+        example: 86400
+        type: integer
+      user_id:
+        description: 用户ID
+        type: string
+    type: object
+  dto.CompareData:
+    properties:
+      differences:
+        description: 差异项列表
+        items:
+          $ref: '#/definitions/dto.DifferenceItem'
+        type: array
+      record1:
+        allOf:
+        - $ref: '#/definitions/dto.CalculationRecord'
+        description: 第一个记录
+      record2:
+        allOf:
+        - $ref: '#/definitions/dto.CalculationRecord'
+        description: 第二个记录
+      summary:
+        allOf:
+        - $ref: '#/definitions/dto.CompareSummary'
+        description: 对比摘要
+    type: object
+  dto.CompareRequest:
+    properties:
+      key1:
+        description: 第一个版本Key
+        example: calc:user123:1710900000:abc123
+        type: string
+      key2:
+        description: 第二个版本Key
+        example: calc:user123:1710900100:def456
+        type: string
+    required:
+    - key1
+    - key2
+    type: object
+  dto.CompareResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/dto.CompareData'
+      message:
+        type: string
+    type: object
+  dto.CompareSummary:
+    properties:
+      changed_fields:
+        description: 变化字段数
+        type: integer
+      decreased_count:
+        description: 减少数量
+        type: integer
+      increased_count:
+        description: 增加数量
+        type: integer
+      main_change:
+        description: 主要变化描述
+        type: string
+      total_fields:
+        description: 总字段数
+        type: integer
+    type: object
+  dto.DeleteHistoryRequest:
+    properties:
+      key:
+        description: Redis Key
+        example: calc:user123:1710900000:abc123
+        type: string
+    required:
+    - key
+    type: object
+  dto.DeleteHistoryResponse:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+    type: object
+  dto.DifferenceItem:
+    properties:
+      change_percent:
+        description: 变化百分比（数值型）
+        type: number
+      change_type:
+        description: '变化类型: increased, decreased, unchanged'
+        type: string
+      field:
+        description: 字段名
+        type: string
+      field_name:
+        description: 字段中文名
+        type: string
+      new_value:
+        description: 新值
+      old_value:
+        description: 旧值
+    type: object
+  dto.HistoryDetailResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/dto.CalculationRecord'
+      message:
+        type: string
+    type: object
+  dto.HistoryListData:
+    properties:
+      records:
+        description: 记录列表
+        items:
+          $ref: '#/definitions/dto.HistoryRecordItem'
+        type: array
+      total:
+        description: 总记录数
+        type: integer
+    type: object
+  dto.HistoryListResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/dto.HistoryListData'
+      message:
+        type: string
+    type: object
+  dto.HistoryRecordItem:
+    properties:
+      created_at:
+        description: 格式化时间
+        type: string
+      id:
+        description: 记录ID
+        type: string
+      key:
+        description: Redis Key
+        type: string
+      nutrient:
+        description: 营养素名称
+        type: string
+      scenario:
+        description: 场景
+        type: string
+      target_median:
+        description: 目标中位数
+        type: number
+      timestamp:
+        description: 计算时间戳
+        type: integer
+      unit:
+        description: 单位
+        type: string
+    type: object
   dto.TargetData:
     properties:
       adjustment_factor:
@@ -77,15 +256,15 @@ definitions:
 host: localhost:8080
 info:
   contact: {}
-  description: 基于数据库摄入数据和DRIs计算营养素目标摄入量的API
+  description: 基于数据库摄入数据和DRIs计算营养素目标摄入量的API。支持计算结果自动保存到Redis，提供历史记录查询和版本对比功能。数据TTL=1天。
   title: 营养素目标计算器API
-  version: "1.0"
+  version: "2.0"
 paths:
   /target/calculate:
     post:
       consumes:
       - application/json
-      description: 根据人群特征、营养素名称和场景，计算目标中位数并检查P95是否超UL
+      description: 根据人群特征、营养素名称和场景，计算目标中位数并检查P95是否超UL。计算结果会自动保存到Redis，TTL=1天
       parameters:
       - description: 计算请求参数
         in: body
@@ -113,4 +292,143 @@ paths:
       summary: 计算营养素目标摄入量
       tags:
       - 营养素目标计算
+  /target/history:
+    delete:
+      consumes:
+      - application/json
+      description: 根据 Redis Key 删除指定的历史记录
+      parameters:
+      - description: 删除请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DeleteHistoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/dto.DeleteHistoryResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 删除历史记录
+      tags:
+      - 历史记录
+    get:
+      consumes:
+      - application/json
+      description: 获取指定用户的计算历史记录列表，按时间倒序排列
+      parameters:
+      - description: 用户ID
+        in: query
+        name: user_id
+        required: true
+        type: string
+      - description: 返回数量限制，默认10
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回历史记录列表
+          schema:
+            $ref: '#/definitions/dto.HistoryListResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取用户历史记录列表
+      tags:
+      - 历史记录
+  /target/history/compare:
+    post:
+      consumes:
+      - application/json
+      description: 对比两个历史计算记录的差异，返回详细的字段对比信息
+      parameters:
+      - description: 对比请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CompareRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回对比结果
+          schema:
+            $ref: '#/definitions/dto.CompareResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 记录不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 对比两个历史版本
+      tags:
+      - 历史记录
+  /target/history/detail:
+    get:
+      consumes:
+      - application/json
+      description: 根据 Redis Key 获取单条历史记录的完整详情
+      parameters:
+      - description: Redis Key
+        in: query
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回历史记录详情
+          schema:
+            $ref: '#/definitions/dto.HistoryDetailResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 记录不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取历史记录详情
+      tags:
+      - 历史记录
 swagger: "2.0"
