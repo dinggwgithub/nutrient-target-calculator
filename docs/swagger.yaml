@@ -42,42 +42,121 @@ definitions:
       message:
         type: string
     type: object
+  dto.CompareData:
+    properties:
+      diff:
+        $ref: '#/definitions/dto.TargetDiff'
+      record1:
+        $ref: '#/definitions/dto.HistoryRecord'
+      record2:
+        $ref: '#/definitions/dto.HistoryRecord'
+    type: object
+  dto.CompareRequest:
+    properties:
+      version_id1:
+        type: string
+      version_id2:
+        type: string
+    required:
+    - version_id1
+    - version_id2
+    type: object
+  dto.CompareResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/dto.CompareData'
+      message:
+        type: string
+    type: object
+  dto.HistoryListData:
+    properties:
+      records:
+        items:
+          $ref: '#/definitions/dto.HistoryRecord'
+        type: array
+      total:
+        type: integer
+    type: object
+  dto.HistoryListResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/dto.HistoryListData'
+      message:
+        type: string
+    type: object
+  dto.HistoryRecord:
+    properties:
+      age:
+        type: integer
+      created_at:
+        type: string
+      crowd:
+        type: string
+      gender:
+        type: string
+      nutrient_name:
+        type: string
+      scenario:
+        type: string
+      target_data:
+        $ref: '#/definitions/dto.TargetData'
+      version_id:
+        type: string
+    type: object
   dto.TargetData:
     properties:
       adjustment_factor:
-        description: 调整因子
         type: number
+      created_at:
+        type: string
       exceed_ul:
-        description: 是否超过UL
         type: boolean
       nutrient_name:
         type: string
       original_cv:
-        description: 原始变异系数
         type: number
       original_mean:
-        description: 原始平均摄入量
         type: number
       target_median:
-        description: 目标中位数
         type: number
       target_p95:
-        description: 目标P95值
         type: number
       ul:
-        description: UL值
         type: number
       unit:
-        description: 单位
+        type: string
+      version_id:
         type: string
       warning:
-        description: 警告信息
         type: string
+    type: object
+  dto.TargetDiff:
+    properties:
+      exceed_ul_changed:
+        type: boolean
+      original_mean_diff:
+        type: number
+      original_mean_diff_pct:
+        type: number
+      target_median_diff:
+        type: number
+      target_median_diff_pct:
+        type: number
+      target_p95_diff:
+        type: number
+      target_p95_diff_pct:
+        type: number
+      warning_changed:
+        type: boolean
     type: object
 host: localhost:8080
 info:
   contact: {}
-  description: 基于数据库摄入数据和DRIs计算营养素目标摄入量的API
+  description: 基于数据库摄入数据和DRIs计算营养素目标摄入量的API，支持历史记录存储和版本对比
   title: 营养素目标计算器API
   version: "1.0"
 paths:
@@ -85,7 +164,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: 根据人群特征、营养素名称和场景，计算目标中位数并检查P95是否超UL
+      description: 根据人群特征、营养素名称和场景，计算目标中位数并检查P95是否超UL，结果自动保存到Redis历史记录（TTL=24小时）
       parameters:
       - description: 计算请求参数
         in: body
@@ -113,4 +192,120 @@ paths:
       summary: 计算营养素目标摄入量
       tags:
       - 营养素目标计算
+  /target/compare:
+    post:
+      consumes:
+      - application/json
+      description: 对比两个历史计算记录的差异，包括目标中位数、P95值、原始均值等指标的变化
+      parameters:
+      - description: 对比请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CompareRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回对比结果
+          schema:
+            $ref: '#/definitions/dto.CompareResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 对比两个历史计算版本
+      tags:
+      - 历史记录
+  /target/history:
+    get:
+      consumes:
+      - application/json
+      description: 根据条件查询历史计算记录，支持按性别、年龄、人群、营养素名称筛选
+      parameters:
+      - description: 性别
+        enum:
+        - 男
+        - 女
+        in: query
+        name: gender
+        type: string
+      - description: 年龄
+        in: query
+        maximum: 120
+        minimum: 0
+        name: age
+        type: integer
+      - description: 人群类型
+        in: query
+        name: crowd
+        type: string
+      - description: 营养素名称
+        in: query
+        name: nutrient_name
+        type: string
+      - default: 20
+        description: 返回数量限制
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回历史记录列表
+          schema:
+            $ref: '#/definitions/dto.HistoryListResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 查询历史计算记录列表
+      tags:
+      - 历史记录
+  /target/history/{version_id}:
+    get:
+      consumes:
+      - application/json
+      description: 根据版本ID查询单条历史计算记录详情
+      parameters:
+      - description: 版本ID
+        in: path
+        name: version_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回历史记录详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 记录不存在或已过期
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据版本ID查询历史记录
+      tags:
+      - 历史记录
 swagger: "2.0"

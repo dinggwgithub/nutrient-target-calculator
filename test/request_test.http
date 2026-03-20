@@ -48,5 +48,34 @@ Content-Type: application/json
 
 ###
 
+# 查询历史记录列表 - 全部
+GET http://localhost:8080/api/target/history?limit=10
+Content-Type: application/json
+
+###
+
+# 查询历史记录列表 - 按条件筛选
+GET http://localhost:8080/api/target/history?gender=男&age=30&nutrient_name=维生素C&limit=10
+Content-Type: application/json
+
+###
+
+# 查询单条历史记录（替换为实际的version_id）
+GET http://localhost:8080/api/target/history/550e8400-e29b-41d4-a716-446655440000
+Content-Type: application/json
+
+###
+
+# 对比两个历史版本（替换为实际的version_id）
+POST http://localhost:8080/api/target/compare
+Content-Type: application/json
+
+{
+    "version_id1": "550e8400-e29b-41d4-a716-446655440000",
+    "version_id2": "660e8400-e29b-41d4-a716-446655440001"
+}
+
+###
+
 # Swagger文档地址
 # http://localhost:8080/swagger/index.html

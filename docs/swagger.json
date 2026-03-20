@@ -1,7 +1,7 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "基于数据库摄入数据和DRIs计算营养素目标摄入量的API",
+        "description": "基于数据库摄入数据和DRIs计算营养素目标摄入量的API，支持历史记录存储和版本对比",
         "title": "营养素目标计算器API",
         "contact": {},
         "version": "1.0"
@@ -11,7 +11,7 @@
     "paths": {
         "/target/calculate": {
             "post": {
-                "description": "根据人群特征、营养素名称和场景，计算目标中位数并检查P95是否超UL",
+                "description": "根据人群特征、营养素名称和场景，计算目标中位数并检查P95是否超UL，结果自动保存到Redis历史记录（TTL=24小时）",
                 "consumes": [
                     "application/json"
                 ],
@@ -49,6 +49,177 @@
                     },
                     "500": {
                         "description": "服务器内部错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/target/compare": {
+            "post": {
+                "description": "对比两个历史计算记录的差异，包括目标中位数、P95值、原始均值等指标的变化",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "历史记录"
+                ],
+                "summary": "对比两个历史计算版本",
+                "parameters": [
+                    {
+                        "description": "对比请求参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CompareRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功返回对比结果",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CompareResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/target/history": {
+            "get": {
+                "description": "根据条件查询历史计算记录，支持按性别、年龄、人群、营养素名称筛选",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "历史记录"
+                ],
+                "summary": "查询历史计算记录列表",
+                "parameters": [
+                    {
+                        "enum": [
+                            "男",
+                            "女"
+                        ],
+                        "type": "string",
+                        "description": "性别",
+                        "name": "gender",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 120,
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "年龄",
+                        "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "人群类型",
+                        "name": "crowd",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "营养素名称",
+                        "name": "nutrient_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "返回数量限制",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功返回历史记录列表",
+                        "schema": {
+                            "$ref": "#/definitions/dto.HistoryListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/target/history/{version_id}": {
+            "get": {
+                "description": "根据版本ID查询单条历史计算记录详情",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "历史记录"
+                ],
+                "summary": "根据版本ID查询历史记录",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "版本ID",
+                        "name": "version_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功返回历史记录详情",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "记录不存在或已过期",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -116,47 +287,173 @@
                 }
             }
         },
+        "dto.CompareData": {
+            "type": "object",
+            "properties": {
+                "diff": {
+                    "$ref": "#/definitions/dto.TargetDiff"
+                },
+                "record1": {
+                    "$ref": "#/definitions/dto.HistoryRecord"
+                },
+                "record2": {
+                    "$ref": "#/definitions/dto.HistoryRecord"
+                }
+            }
+        },
+        "dto.CompareRequest": {
+            "type": "object",
+            "required": [
+                "version_id1",
+                "version_id2"
+            ],
+            "properties": {
+                "version_id1": {
+                    "type": "string"
+                },
+                "version_id2": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CompareResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/dto.CompareData"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.HistoryListData": {
+            "type": "object",
+            "properties": {
+                "records": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.HistoryRecord"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.HistoryListResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/dto.HistoryListData"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.HistoryRecord": {
+            "type": "object",
+            "properties": {
+                "age": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "crowd": {
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "string"
+                },
+                "nutrient_name": {
+                    "type": "string"
+                },
+                "scenario": {
+                    "type": "string"
+                },
+                "target_data": {
+                    "$ref": "#/definitions/dto.TargetData"
+                },
+                "version_id": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.TargetData": {
             "type": "object",
             "properties": {
                 "adjustment_factor": {
-                    "description": "调整因子",
                     "type": "number"
                 },
+                "created_at": {
+                    "type": "string"
+                },
                 "exceed_ul": {
-                    "description": "是否超过UL",
                     "type": "boolean"
                 },
                 "nutrient_name": {
                     "type": "string"
                 },
                 "original_cv": {
-                    "description": "原始变异系数",
                     "type": "number"
                 },
                 "original_mean": {
-                    "description": "原始平均摄入量",
                     "type": "number"
                 },
                 "target_median": {
-                    "description": "目标中位数",
                     "type": "number"
                 },
                 "target_p95": {
-                    "description": "目标P95值",
                     "type": "number"
                 },
                 "ul": {
-                    "description": "UL值",
                     "type": "number"
                 },
                 "unit": {
-                    "description": "单位",
+                    "type": "string"
+                },
+                "version_id": {
                     "type": "string"
                 },
                 "warning": {
-                    "description": "警告信息",
                     "type": "string"
+                }
+            }
+        },
+        "dto.TargetDiff": {
+            "type": "object",
+            "properties": {
+                "exceed_ul_changed": {
+                    "type": "boolean"
+                },
+                "original_mean_diff": {
+                    "type": "number"
+                },
+                "original_mean_diff_pct": {
+                    "type": "number"
+                },
+                "target_median_diff": {
+                    "type": "number"
+                },
+                "target_median_diff_pct": {
+                    "type": "number"
+                },
+                "target_p95_diff": {
+                    "type": "number"
+                },
+                "target_p95_diff_pct": {
+                    "type": "number"
+                },
+                "warning_changed": {
+                    "type": "boolean"
                 }
             }
         }
