@@ -12,22 +12,22 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
-	// API路由组
 	api := r.Group("/api")
 	{
-		// 目标计算接口
 		api.POST("/target/calculate", controller.CalculateTarget)
 
-		// 健康检查
+		api.GET("/target/history", controller.GetHistoryList)
+		api.GET("/target/history/:version_id", controller.GetRecordByVID)
+		api.POST("/target/compare", controller.CompareHistory)
+
 		api.GET("/health", func(c *gin.Context) {
 			c.JSON(200, gin.H{
-				"status": "ok",
+				"status":  "ok",
 				"message": "服务运行正常",
 			})
 		})
 	}
 
-	// Swagger文档路由
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	return r
