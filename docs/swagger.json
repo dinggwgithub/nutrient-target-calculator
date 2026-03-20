@@ -1,17 +1,17 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "基于数据库摄入数据和DRIs计算营养素目标摄入量的API",
+        "description": "基于数据库摄入数据和DRIs计算营养素目标摄入量的API，支持Redis缓存、历史记录查询和版本对比",
         "title": "营养素目标计算器API",
         "contact": {},
-        "version": "1.0"
+        "version": "2.0"
     },
     "host": "localhost:8080",
     "basePath": "/api",
     "paths": {
         "/target/calculate": {
             "post": {
-                "description": "根据人群特征、营养素名称和场景，计算目标中位数并检查P95是否超UL",
+                "description": "根据人群特征、营养素名称和场景，计算目标中位数并检查P95是否超UL，结果自动保存到Redis",
                 "consumes": [
                     "application/json"
                 ],
@@ -35,7 +35,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "成功返回计算结果",
+                        "description": "成功返回计算结果，包含version_id用于后续查询和对比",
                         "schema": {
                             "$ref": "#/definitions/dto.CalculateTargetResponse"
                         }
@@ -43,15 +43,158 @@
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/dto.CommonResponse"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/dto.CommonResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/target/compare": {
+            "post": {
+                "description": "对比两个计算版本的参数和结果差异，生成详细的对比报告",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "版本对比"
+                ],
+                "summary": "对比两个历史版本差异",
+                "parameters": [
+                    {
+                        "description": "对比请求参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CompareRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功返回对比结果，包含详细的差异分析",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CompareResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommonResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "某个版本不存在或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommonResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommonResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/target/history": {
+            "get": {
+                "description": "分页获取计算历史记录，可通过user_id过滤特定用户的记录",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "历史记录管理"
+                ],
+                "summary": "获取计算历史记录列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户ID，可选，不填则返回所有记录",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码，默认1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页条数，默认10",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功返回历史记录列表",
+                        "schema": {
+                            "$ref": "#/definitions/dto.HistoryListResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommonResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/target/history/{version_id}": {
+            "get": {
+                "description": "根据version_id获取计算结果的详细信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "历史记录管理"
+                ],
+                "summary": "获取历史记录详情",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "计算结果版本ID",
+                        "name": "version_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功返回历史记录详情",
+                        "schema": {
+                            "$ref": "#/definitions/dto.HistoryDetailResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "记录不存在或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommonResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommonResponse"
                         }
                     }
                 }
@@ -99,6 +242,11 @@
                         "C"
                     ],
                     "example": "A"
+                },
+                "user_id": {
+                    "description": "可选用户标识，用于关联历史记录",
+                    "type": "string",
+                    "example": "user_123"
                 }
             }
         },
@@ -113,6 +261,222 @@
                 },
                 "message": {
                     "type": "string"
+                },
+                "version_id": {
+                    "description": "计算结果的版本ID（用于后续查询和对比）",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CalculationResult": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "计算时间",
+                    "type": "string"
+                },
+                "expire_at": {
+                    "description": "过期时间",
+                    "type": "string"
+                },
+                "request": {
+                    "description": "原始请求参数",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.CalculateTargetRequest"
+                        }
+                    ]
+                },
+                "result": {
+                    "description": "计算结果",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.TargetData"
+                        }
+                    ]
+                },
+                "version_id": {
+                    "description": "唯一版本ID",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CommonResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {},
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CompareDiffItem": {
+            "type": "object",
+            "properties": {
+                "change_type": {
+                    "description": "变化类型：increase/decrease/no_change/different",
+                    "type": "string"
+                },
+                "description": {
+                    "description": "字段描述",
+                    "type": "string"
+                },
+                "diff": {
+                    "description": "差异值（数值型）",
+                    "type": "number"
+                },
+                "diff_percent": {
+                    "description": "差异百分比（数值型）",
+                    "type": "string"
+                },
+                "field": {
+                    "description": "字段名",
+                    "type": "string"
+                },
+                "value1": {
+                    "description": "版本1的值"
+                },
+                "value2": {
+                    "description": "版本2的值"
+                }
+            }
+        },
+        "dto.CompareRequest": {
+            "type": "object",
+            "required": [
+                "version_id1",
+                "version_id2"
+            ],
+            "properties": {
+                "version_id1": {
+                    "type": "string",
+                    "example": "calc_abc123"
+                },
+                "version_id2": {
+                    "type": "string",
+                    "example": "calc_def456"
+                }
+            }
+        },
+        "dto.CompareResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "diff_summary": {
+                    "$ref": "#/definitions/dto.CompareSummary"
+                },
+                "diffs": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CompareDiffItem"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "version1": {
+                    "$ref": "#/definitions/dto.CalculationResult"
+                },
+                "version2": {
+                    "$ref": "#/definitions/dto.CalculationResult"
+                }
+            }
+        },
+        "dto.CompareSummary": {
+            "type": "object",
+            "properties": {
+                "changed_fields": {
+                    "description": "有变化的字段数",
+                    "type": "integer"
+                },
+                "decreased_fields": {
+                    "description": "减少的字段数",
+                    "type": "integer"
+                },
+                "increased_fields": {
+                    "description": "增加的字段数",
+                    "type": "integer"
+                },
+                "total_fields": {
+                    "description": "总字段数",
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.HistoryDetailResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/dto.CalculationResult"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.HistoryItem": {
+            "type": "object",
+            "properties": {
+                "age": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "crowd": {
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "string"
+                },
+                "nutrient_name": {
+                    "type": "string"
+                },
+                "scenario": {
+                    "type": "string"
+                },
+                "target_median": {
+                    "type": "number"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "version_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.HistoryListResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.HistoryItem"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },

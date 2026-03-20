@@ -26,6 +26,10 @@ definitions:
         - C
         example: A
         type: string
+      user_id:
+        description: 可选用户标识，用于关联历史记录
+        example: user_123
+        type: string
     required:
     - age
     - crowd
@@ -41,6 +45,150 @@ definitions:
         $ref: '#/definitions/dto.TargetData'
       message:
         type: string
+      version_id:
+        description: 计算结果的版本ID（用于后续查询和对比）
+        type: string
+    type: object
+  dto.CalculationResult:
+    properties:
+      created_at:
+        description: 计算时间
+        type: string
+      expire_at:
+        description: 过期时间
+        type: string
+      request:
+        allOf:
+        - $ref: '#/definitions/dto.CalculateTargetRequest'
+        description: 原始请求参数
+      result:
+        allOf:
+        - $ref: '#/definitions/dto.TargetData'
+        description: 计算结果
+      version_id:
+        description: 唯一版本ID
+        type: string
+    type: object
+  dto.CommonResponse:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+    type: object
+  dto.CompareDiffItem:
+    properties:
+      change_type:
+        description: 变化类型：increase/decrease/no_change/different
+        type: string
+      description:
+        description: 字段描述
+        type: string
+      diff:
+        description: 差异值（数值型）
+        type: number
+      diff_percent:
+        description: 差异百分比（数值型）
+        type: string
+      field:
+        description: 字段名
+        type: string
+      value1:
+        description: 版本1的值
+      value2:
+        description: 版本2的值
+    type: object
+  dto.CompareRequest:
+    properties:
+      version_id1:
+        example: calc_abc123
+        type: string
+      version_id2:
+        example: calc_def456
+        type: string
+    required:
+    - version_id1
+    - version_id2
+    type: object
+  dto.CompareResponse:
+    properties:
+      code:
+        type: integer
+      diff_summary:
+        $ref: '#/definitions/dto.CompareSummary'
+      diffs:
+        items:
+          $ref: '#/definitions/dto.CompareDiffItem'
+        type: array
+      message:
+        type: string
+      version1:
+        $ref: '#/definitions/dto.CalculationResult'
+      version2:
+        $ref: '#/definitions/dto.CalculationResult'
+    type: object
+  dto.CompareSummary:
+    properties:
+      changed_fields:
+        description: 有变化的字段数
+        type: integer
+      decreased_fields:
+        description: 减少的字段数
+        type: integer
+      increased_fields:
+        description: 增加的字段数
+        type: integer
+      total_fields:
+        description: 总字段数
+        type: integer
+    type: object
+  dto.HistoryDetailResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/dto.CalculationResult'
+      message:
+        type: string
+    type: object
+  dto.HistoryItem:
+    properties:
+      age:
+        type: integer
+      created_at:
+        type: string
+      crowd:
+        type: string
+      gender:
+        type: string
+      nutrient_name:
+        type: string
+      scenario:
+        type: string
+      target_median:
+        type: number
+      unit:
+        type: string
+      version_id:
+        type: string
+    type: object
+  dto.HistoryListResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/dto.HistoryItem'
+        type: array
+      message:
+        type: string
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
     type: object
   dto.TargetData:
     properties:
@@ -77,15 +225,15 @@ definitions:
 host: localhost:8080
 info:
   contact: {}
-  description: 基于数据库摄入数据和DRIs计算营养素目标摄入量的API
+  description: 基于数据库摄入数据和DRIs计算营养素目标摄入量的API，支持Redis缓存、历史记录查询和版本对比
   title: 营养素目标计算器API
-  version: "1.0"
+  version: "2.0"
 paths:
   /target/calculate:
     post:
       consumes:
       - application/json
-      description: 根据人群特征、营养素名称和场景，计算目标中位数并检查P95是否超UL
+      description: 根据人群特征、营养素名称和场景，计算目标中位数并检查P95是否超UL，结果自动保存到Redis
       parameters:
       - description: 计算请求参数
         in: body
@@ -97,20 +245,113 @@ paths:
       - application/json
       responses:
         "200":
-          description: 成功返回计算结果
+          description: 成功返回计算结果，包含version_id用于后续查询和对比
           schema:
             $ref: '#/definitions/dto.CalculateTargetResponse'
         "400":
           description: 请求参数错误
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/dto.CommonResponse'
         "500":
           description: 服务器内部错误
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/dto.CommonResponse'
       summary: 计算营养素目标摄入量
       tags:
       - 营养素目标计算
+  /target/compare:
+    post:
+      consumes:
+      - application/json
+      description: 对比两个计算版本的参数和结果差异，生成详细的对比报告
+      parameters:
+      - description: 对比请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CompareRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回对比结果，包含详细的差异分析
+          schema:
+            $ref: '#/definitions/dto.CompareResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/dto.CommonResponse'
+        "404":
+          description: 某个版本不存在或已过期
+          schema:
+            $ref: '#/definitions/dto.CommonResponse'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.CommonResponse'
+      summary: 对比两个历史版本差异
+      tags:
+      - 版本对比
+  /target/history:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取计算历史记录，可通过user_id过滤特定用户的记录
+      parameters:
+      - description: 用户ID，可选，不填则返回所有记录
+        in: query
+        name: user_id
+        type: string
+      - description: 页码，默认1
+        in: query
+        name: page
+        type: integer
+      - description: 每页条数，默认10
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回历史记录列表
+          schema:
+            $ref: '#/definitions/dto.HistoryListResponse'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.CommonResponse'
+      summary: 获取计算历史记录列表
+      tags:
+      - 历史记录管理
+  /target/history/{version_id}:
+    get:
+      consumes:
+      - application/json
+      description: 根据version_id获取计算结果的详细信息
+      parameters:
+      - description: 计算结果版本ID
+        in: path
+        name: version_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回历史记录详情
+          schema:
+            $ref: '#/definitions/dto.HistoryDetailResponse'
+        "404":
+          description: 记录不存在或已过期
+          schema:
+            $ref: '#/definitions/dto.CommonResponse'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.CommonResponse'
+      summary: 获取历史记录详情
+      tags:
+      - 历史记录管理
 swagger: "2.0"
