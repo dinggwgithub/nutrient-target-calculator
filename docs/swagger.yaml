@@ -1,0 +1,116 @@
+basePath: /api
+definitions:
+  dto.CalculateTargetRequest:
+    properties:
+      age:
+        example: 30
+        maximum: 120
+        minimum: 0
+        type: integer
+      crowd:
+        example: 普通人群
+        type: string
+      gender:
+        enum:
+        - 男
+        - 女
+        example: 男
+        type: string
+      nutrient_name:
+        example: 维生素C
+        type: string
+      scenario:
+        enum:
+        - A
+        - B
+        - C
+        example: A
+        type: string
+    required:
+    - age
+    - crowd
+    - gender
+    - nutrient_name
+    - scenario
+    type: object
+  dto.CalculateTargetResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/dto.TargetData'
+      message:
+        type: string
+    type: object
+  dto.TargetData:
+    properties:
+      adjustment_factor:
+        description: 调整因子
+        type: number
+      exceed_ul:
+        description: 是否超过UL
+        type: boolean
+      nutrient_name:
+        type: string
+      original_cv:
+        description: 原始变异系数
+        type: number
+      original_mean:
+        description: 原始平均摄入量
+        type: number
+      target_median:
+        description: 目标中位数
+        type: number
+      target_p95:
+        description: 目标P95值
+        type: number
+      ul:
+        description: UL值
+        type: number
+      unit:
+        description: 单位
+        type: string
+      warning:
+        description: 警告信息
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: 基于数据库摄入数据和DRIs计算营养素目标摄入量的API
+  title: 营养素目标计算器API
+  version: "1.0"
+paths:
+  /target/calculate:
+    post:
+      consumes:
+      - application/json
+      description: 根据人群特征、营养素名称和场景，计算目标中位数并检查P95是否超UL
+      parameters:
+      - description: 计算请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CalculateTargetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回计算结果
+          schema:
+            $ref: '#/definitions/dto.CalculateTargetResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 计算营养素目标摄入量
+      tags:
+      - 营养素目标计算
+swagger: "2.0"

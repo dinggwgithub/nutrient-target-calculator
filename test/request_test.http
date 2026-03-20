@@ -1,0 +1,52 @@
+### 营养素目标计算API测试
+
+# 健康检查
+GET http://localhost:8080/api/health
+Content-Type: application/json
+
+###
+
+# 计算营养素目标 - 场景A（高目标）
+POST http://localhost:8080/api/target/calculate
+Content-Type: application/json
+
+{
+    "gender": "男",
+    "age": 30,
+    "crowd": "普通人群",
+    "nutrient_name": "维生素C",
+    "scenario": "A"
+}
+
+###
+
+# 计算营养素目标 - 场景B（中等目标）
+POST http://localhost:8080/api/target/calculate
+Content-Type: application/json
+
+{
+    "gender": "女",
+    "age": 25,
+    "crowd": "普通人群",
+    "nutrient_name": "铁",
+    "scenario": "B"
+}
+
+###
+
+# 计算营养素目标 - 场景C（保守目标）
+POST http://localhost:8080/api/target/calculate
+Content-Type: application/json
+
+{
+    "gender": "男",
+    "age": 40,
+    "crowd": "普通人群",
+    "nutrient_name": "钙",
+    "scenario": "C"
+}
+
+###
+
+# Swagger文档地址
+# http://localhost:8080/swagger/index.html
